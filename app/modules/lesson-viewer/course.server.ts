@@ -2,8 +2,8 @@ import { db } from "~/db";
 import { categories, courses, lessons, modules, users } from "~/db/schema";
 import { eq, or } from "drizzle-orm";
 
-export function getCourseWithDetails(id: number) {
-  const course = db
+function getCourseRow(id: number) {
+  return db
     .select({
       id: courses.id,
       title: courses.title,
@@ -28,7 +28,10 @@ export function getCourseWithDetails(id: number) {
     .innerJoin(categories, eq(courses.categoryId, categories.id))
     .where(eq(courses.id, id))
     .get();
+}
 
+export function getCourseWithDetails(id: number) {
+  const course = getCourseRow(id);
   if (!course) return null;
 
   const courseModules = db

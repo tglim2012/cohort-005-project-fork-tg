@@ -28,11 +28,8 @@ export function getCommentById(commentId: number) {
   return db.select().from(comments).where(eq(comments.id, commentId)).get();
 }
 
-export function getLessonThread(lessonId: number): ThreadComment[] {
-  const course = getCourseForLesson(lessonId);
-  if (!course) return [];
-
-  const rows = db
+function selectLessonCommentRows(lessonId: number) {
+  return db
     .select({
       id: comments.id,
       body: comments.body,
@@ -50,6 +47,13 @@ export function getLessonThread(lessonId: number): ThreadComment[] {
     .where(eq(comments.lessonId, lessonId))
     .orderBy(asc(comments.createdAt), asc(comments.id))
     .all();
+}
+
+export function getLessonThread(lessonId: number): ThreadComment[] {
+  const course = getCourseForLesson(lessonId);
+  if (!course) return [];
+
+  const rows = selectLessonCommentRows(lessonId);
 
   const toThreadComment = (row: (typeof rows)[number]): ThreadComment => {
     const deleted = row.deletedAt !== null;
