@@ -50,60 +50,25 @@ function useAutoplay() {
   return [enabled, toggle] as const;
 }
 
-export function FullLesson({
-  data,
-}: {
-  data: Extract<LessonLoaderData, { view: "full" }>;
-}) {
+type FullLessonData = Extract<LessonLoaderData, { view: "full" }>;
+type CourseLink = FullLessonData["course"];
+type LessonLink = NonNullable<FullLessonData["nextLesson"]>;
+
+export function FullLesson({ data }: { data: FullLessonData }) {
   const {
     course,
     curriculum,
     module: mod,
     lesson,
-    contentHtml,
-    lessonStatus,
     enrolled,
     currentUserId,
-    prevLesson,
-    nextLesson,
     quiz,
     bestAttempt,
-    lastWatchPosition,
-    watchProgress,
     lessonProgressMap,
-    comments,
-    canModerate,
-    instructorName,
-    bookmarked,
-    note,
   } = data;
-  const [autoplay, toggleAutoplay] = useAutoplay();
-  const fetcher = useFetcher({ key: `mark-complete-${lesson.id}` });
-  const quizFetcher = useFetcher({ key: `quiz-${lesson.id}` });
-  const navigate = useNavigate();
-
-  const isMarking =
-    fetcher.state !== "idle" &&
-    fetcher.formData?.get("intent") === "mark-complete";
-
-  const justCompleted = fetcher.data?.success;
-
-  const isCompleted =
-    lessonStatus === LessonProgressStatus.Completed || justCompleted;
-
-  // Navigate to next lesson after marking complete
-  useEffect(() => {
-    if (justCompleted && nextLesson) {
-      navigate(`/courses/${course.slug}/lessons/${nextLesson.id}`);
-    }
-  }, [justCompleted, nextLesson, course.slug, navigate]);
-
-  const quizResult = quizFetcher.data?.quizResult ?? null;
-  const isSubmittingQuiz = quizFetcher.state !== "idle";
 
   return (
     <div className="flex">
-      {/* Curriculum Sidebar */}
       <CurriculumSidebar
         course={course}
         curriculum={curriculum}
@@ -120,182 +85,279 @@ export function FullLesson({
         />
 
         <div className="mx-auto max-w-4xl">
-          {/* Lesson Title */}
-          <div className="mb-2 flex items-start justify-between gap-3">
-            <h1 className="text-3xl font-bold">{lesson.title}</h1>
-            {currentUserId && <BookmarkToggle bookmarked={bookmarked} />}
-          </div>
-          <div className="mb-6 flex items-center gap-3">
-            {lesson.durationMinutes && (
-              <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                <Clock className="size-4" />
-                {formatDuration(lesson.durationMinutes, true, false, false)}
-              </div>
-            )}
-            {lesson.githubRepoUrl && (
-              <a
-                href={lesson.githubRepoUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                <Button variant="outline" size="sm">
-                  <Github className="mr-1.5 size-4" />
-                  Open Code
-                </Button>
-              </a>
-            )}
-          </div>
+          <LessonHeader data={data} />
+          <LessonBody data={data} />
 
-          {/* YouTube Video */}
-          {lesson.videoUrl && (
-            <YouTubePlayer
-              videoUrl={lesson.videoUrl}
-              lessonId={lesson.id}
-              title={lesson.title}
-              startPosition={lastWatchPosition}
-              durationMinutes={lesson.durationMinutes}
-              watchProgress={watchProgress}
-              trackingEnabled={enrolled && !!currentUserId}
-              autoplay={autoplay}
-              onToggleAutoplay={toggleAutoplay}
-            />
-          )}
-
-          {/* Lesson Content */}
-          {contentHtml && (
-            <div
-              className="prose prose-neutral dark:prose-invert mb-8 max-w-none"
-              // oxlint-disable-next-line react/no-danger -- the instructor wrote this Markdown
-              dangerouslySetInnerHTML={{ __html: contentHtml }}
-            />
-          )}
-
-          {!contentHtml && !lesson.videoUrl && (
-            <Card className="mb-8">
-              <CardContent className="py-12 text-center text-muted-foreground">
-                No content has been added to this lesson yet.
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Quiz Section */}
           {quiz && enrolled && currentUserId && (
-            <QuizSection
+            <LessonQuiz
+              lessonId={lesson.id}
               quiz={quiz}
               bestAttempt={bestAttempt}
-              quizResult={quizResult}
-              quizFetcher={quizFetcher}
-              isSubmitting={isSubmittingQuiz}
             />
           )}
 
-          {/* Mark Complete / Up Next */}
-          {enrolled && currentUserId && (
-            <div className="mb-8">
-              {isCompleted ? (
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-2 text-green-600">
-                    <CheckCircle2 className="size-5" />
-                    <span className="font-medium">Lesson completed</span>
-                  </div>
-                  {nextLesson && (
-                    <Link
-                      to={`/courses/${course.slug}/lessons/${nextLesson.id}`}
-                    >
-                      <Button variant="outline" size="sm">
-                        Up next: {nextLesson.title}
-                        <ChevronRight className="ml-1 size-4" />
-                      </Button>
-                    </Link>
-                  )}
-                </div>
-              ) : nextLesson ? (
-                <fetcher.Form method="post">
-                  <input type="hidden" name="intent" value="mark-complete" />
-                  <Button disabled={isMarking}>
-                    {isMarking ? (
-                      "Completing..."
-                    ) : (
-                      <>
-                        Up next: {nextLesson.title}
-                        <ChevronRight className="ml-1 size-4" />
-                      </>
-                    )}
-                  </Button>
-                </fetcher.Form>
-              ) : (
-                <fetcher.Form method="post">
-                  <input type="hidden" name="intent" value="mark-complete" />
-                  <Button disabled={isMarking}>
-                    <CheckCircle2 className="mr-2 size-4" />
-                    {isMarking ? "Marking..." : "Mark as Complete"}
-                  </Button>
-                </fetcher.Form>
-              )}
-            </div>
-          )}
+          {enrolled && currentUserId && <MarkComplete data={data} />}
 
-          {/* Questions & Discussion and the Student's own Note, side by side
-              in one panel — both confidential to people with access */}
-          <LessonDiscussionAndNotes
-            // A new lesson starts a new Note draft.
-            key={lesson.id}
-            comments={comments}
-            currentUserId={currentUserId}
-            canModerate={canModerate}
-            instructorName={instructorName}
-            note={note}
-          />
-
-          {/* Prev/Next Navigation */}
-          <div className="flex items-center justify-between border-t pt-6">
-            {prevLesson ? (
-              <Link
-                to={`/courses/${course.slug}/lessons/${prevLesson.id}`}
-                className="flex items-center gap-2 text-sm hover:text-foreground text-muted-foreground"
-              >
-                <ChevronLeft className="size-4" />
-                <div>
-                  <div className="text-xs text-muted-foreground">Previous</div>
-                  <div className="font-medium text-foreground">
-                    {prevLesson.title}
-                  </div>
-                </div>
-              </Link>
-            ) : (
-              <div />
-            )}
-
-            {nextLesson ? (
-              <Link
-                to={`/courses/${course.slug}/lessons/${nextLesson.id}`}
-                className="flex items-center gap-2 text-right text-sm hover:text-foreground text-muted-foreground"
-              >
-                <div>
-                  <div className="text-xs text-muted-foreground">Next</div>
-                  <div className="font-medium text-foreground">
-                    {nextLesson.title}
-                  </div>
-                </div>
-                <ChevronRight className="size-4" />
-              </Link>
-            ) : (
-              <Link
-                to={`/courses/${course.slug}`}
-                className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
-              >
-                <div>
-                  <div className="text-xs text-muted-foreground">Back to</div>
-                  <div className="font-medium text-foreground">
-                    {course.title}
-                  </div>
-                </div>
-                <ChevronRight className="size-4" />
-              </Link>
-            )}
-          </div>
+          <LessonFooter data={data} />
         </div>
       </div>
+    </div>
+  );
+}
+
+function LessonFooter({ data }: { data: FullLessonData }) {
+  return (
+    <>
+      <LessonDiscussionAndNotes
+        // A new lesson starts a new Note draft.
+        key={data.lesson.id}
+        comments={data.comments}
+        currentUserId={data.currentUserId}
+        canModerate={data.canModerate}
+        instructorName={data.instructorName}
+        note={data.note}
+      />
+
+      <LessonPager
+        course={data.course}
+        prevLesson={data.prevLesson}
+        nextLesson={data.nextLesson}
+      />
+    </>
+  );
+}
+
+function LessonQuiz({
+  lessonId,
+  quiz,
+  bestAttempt,
+}: {
+  lessonId: number;
+  quiz: NonNullable<FullLessonData["quiz"]>;
+  bestAttempt: FullLessonData["bestAttempt"];
+}) {
+  const quizFetcher = useFetcher({ key: `quiz-${lessonId}` });
+
+  return (
+    <QuizSection
+      quiz={quiz}
+      bestAttempt={bestAttempt}
+      quizResult={quizFetcher.data?.quizResult ?? null}
+      quizFetcher={quizFetcher}
+      isSubmitting={quizFetcher.state !== "idle"}
+    />
+  );
+}
+
+function LessonHeader({
+  data: { lesson, currentUserId, bookmarked },
+}: {
+  data: FullLessonData;
+}) {
+  return (
+    <>
+      <div className="mb-2 flex items-start justify-between gap-3">
+        <h1 className="text-3xl font-bold">{lesson.title}</h1>
+        {currentUserId && <BookmarkToggle bookmarked={bookmarked} />}
+      </div>
+      <div className="mb-6 flex items-center gap-3">
+        {lesson.durationMinutes && (
+          <div className="flex items-center gap-1 text-sm text-muted-foreground">
+            <Clock className="size-4" />
+            {formatDuration(lesson.durationMinutes, true, false, false)}
+          </div>
+        )}
+        {lesson.githubRepoUrl && (
+          <a
+            href={lesson.githubRepoUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <Button variant="outline" size="sm">
+              <Github className="mr-1.5 size-4" />
+              Open Code
+            </Button>
+          </a>
+        )}
+      </div>
+    </>
+  );
+}
+
+function LessonBody({
+  data: {
+    lesson,
+    contentHtml,
+    enrolled,
+    currentUserId,
+    lastWatchPosition,
+    watchProgress,
+  },
+}: {
+  data: FullLessonData;
+}) {
+  const [autoplay, toggleAutoplay] = useAutoplay();
+
+  return (
+    <>
+      {lesson.videoUrl && (
+        <YouTubePlayer
+          videoUrl={lesson.videoUrl}
+          lessonId={lesson.id}
+          title={lesson.title}
+          startPosition={lastWatchPosition}
+          durationMinutes={lesson.durationMinutes}
+          watchProgress={watchProgress}
+          trackingEnabled={enrolled && !!currentUserId}
+          autoplay={autoplay}
+          onToggleAutoplay={toggleAutoplay}
+        />
+      )}
+
+      {contentHtml && (
+        <div
+          className="prose prose-neutral dark:prose-invert mb-8 max-w-none"
+          // oxlint-disable-next-line react/no-danger -- the instructor wrote this Markdown
+          dangerouslySetInnerHTML={{ __html: contentHtml }}
+        />
+      )}
+
+      {!contentHtml && !lesson.videoUrl && (
+        <Card className="mb-8">
+          <CardContent className="py-12 text-center text-muted-foreground">
+            No content has been added to this lesson yet.
+          </CardContent>
+        </Card>
+      )}
+    </>
+  );
+}
+
+function MarkComplete({
+  data: { course, lesson, lessonStatus, nextLesson },
+}: {
+  data: FullLessonData;
+}) {
+  const fetcher = useFetcher({ key: `mark-complete-${lesson.id}` });
+  const navigate = useNavigate();
+
+  const isMarking =
+    fetcher.state !== "idle" &&
+    fetcher.formData?.get("intent") === "mark-complete";
+  const justCompleted = fetcher.data?.success;
+  const isCompleted =
+    lessonStatus === LessonProgressStatus.Completed || justCompleted;
+
+  useEffect(() => {
+    if (justCompleted && nextLesson) {
+      navigate(`/courses/${course.slug}/lessons/${nextLesson.id}`);
+    }
+  }, [justCompleted, nextLesson, course.slug, navigate]);
+
+  return (
+    <div className="mb-8">
+      {isCompleted ? (
+        <LessonCompleted course={course} nextLesson={nextLesson} />
+      ) : (
+        <fetcher.Form method="post">
+          <input type="hidden" name="intent" value="mark-complete" />
+          {nextLesson ? (
+            <Button disabled={isMarking}>
+              {isMarking ? (
+                "Completing..."
+              ) : (
+                <>
+                  Up next: {nextLesson.title}
+                  <ChevronRight className="ml-1 size-4" />
+                </>
+              )}
+            </Button>
+          ) : (
+            <Button disabled={isMarking}>
+              <CheckCircle2 className="mr-2 size-4" />
+              {isMarking ? "Marking..." : "Mark as Complete"}
+            </Button>
+          )}
+        </fetcher.Form>
+      )}
+    </div>
+  );
+}
+
+function LessonCompleted({
+  course,
+  nextLesson,
+}: {
+  course: CourseLink;
+  nextLesson: LessonLink | null;
+}) {
+  return (
+    <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2 text-green-600">
+        <CheckCircle2 className="size-5" />
+        <span className="font-medium">Lesson completed</span>
+      </div>
+      {nextLesson && (
+        <Link to={`/courses/${course.slug}/lessons/${nextLesson.id}`}>
+          <Button variant="outline" size="sm">
+            Up next: {nextLesson.title}
+            <ChevronRight className="ml-1 size-4" />
+          </Button>
+        </Link>
+      )}
+    </div>
+  );
+}
+
+function LessonPager({
+  course,
+  prevLesson,
+  nextLesson,
+}: {
+  course: CourseLink;
+  prevLesson: LessonLink | null;
+  nextLesson: LessonLink | null;
+}) {
+  return (
+    <div className="flex items-center justify-between border-t pt-6">
+      {prevLesson ? (
+        <Link
+          to={`/courses/${course.slug}/lessons/${prevLesson.id}`}
+          className="flex items-center gap-2 text-sm hover:text-foreground text-muted-foreground"
+        >
+          <ChevronLeft className="size-4" />
+          <PagerLabel label="Previous" title={prevLesson.title} />
+        </Link>
+      ) : (
+        <div />
+      )}
+
+      {nextLesson ? (
+        <Link
+          to={`/courses/${course.slug}/lessons/${nextLesson.id}`}
+          className="flex items-center gap-2 text-right text-sm hover:text-foreground text-muted-foreground"
+        >
+          <PagerLabel label="Next" title={nextLesson.title} />
+          <ChevronRight className="size-4" />
+        </Link>
+      ) : (
+        <Link
+          to={`/courses/${course.slug}`}
+          className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
+        >
+          <PagerLabel label="Back to" title={course.title} />
+          <ChevronRight className="size-4" />
+        </Link>
+      )}
+    </div>
+  );
+}
+
+function PagerLabel({ label, title }: { label: string; title: string }) {
+  return (
+    <div>
+      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className="font-medium text-foreground">{title}</div>
     </div>
   );
 }
