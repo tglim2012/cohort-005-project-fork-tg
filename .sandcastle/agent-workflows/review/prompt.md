@@ -12,16 +12,18 @@ Leave the human reviewer as little as possible. Fix every finding you can on
 pushes your commits. Leave `.github/` untouched.
 
 Every finding you leave unfixed becomes an inline comment on its file and
-line. You will be asked for them as structured output.
+line. You will be asked for them as structured output. That comment is the
+finding's only home: the workflow adds a line to the verdict that points at
+the comments, so the verdict carries only what you fixed.
 
 Write your verdict on the branch, after your fixes, to /tmp/review-verdict.md:
 
     ## Standards: PASS | CHANGES REQUESTED
-    One line of reasoning, then the findings, worst first: each one fixed
-    (its commit) or left (its file and line), citing the rule by heading.
+    One line of reasoning, then each finding you fixed, worst first: the
+    rule by heading, what changed, and its commit.
 
     ## Spec: PASS | CHANGES REQUESTED
-    One line of reasoning, then the findings, fixed or left.
+    One line of reasoning, then each finding you fixed.
 
     ## Rules this review wanted and could not find
     Anything you wanted to fail the change for that no standard covers.
