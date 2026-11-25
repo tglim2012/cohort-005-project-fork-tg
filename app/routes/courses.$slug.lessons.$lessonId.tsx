@@ -75,6 +75,12 @@ const saveNoteSchema = z.object({
     ),
 });
 
+const submitQuizSchema = z.object({
+  quizId: z.coerce.number().int().positive(),
+});
+
+const recordIdSchema = z.coerce.number().int().positive();
+
 const deleteCommentSchema = z.object({
   intent: z.literal("delete-comment"),
   commentId: z.coerce.number().int(),
@@ -429,24 +435,25 @@ export async function action({ params, request }: Route.ActionArgs) {
   }
 
   if (intent === "submit-quiz") {
-    const quizId = Number(formData.get("quizId"));
-    if (isNaN(quizId)) {
+    const parsed = parseFormData(formData, submitQuizSchema);
+    if (!parsed.success) {
       throw data("Invalid quiz ID", { status: 400 });
     }
+    const { quizId } = parsed.data;
     const quiz = getLessonQuiz(quizId, lessonId);
     if (!quiz) {
       throw data("Quiz not found", { status: 404 });
     }
 
-    // Collect answers: form fields named "question-{questionId}" with value = optionId
     const selectedAnswers: Record<number, number> = {};
     for (const [key, value] of formData.entries()) {
-      if (key.startsWith("question-")) {
-        const questionId = Number(key.replace("question-", ""));
-        const optionId = Number(value);
-        if (!isNaN(questionId) && !isNaN(optionId)) {
-          selectedAnswers[questionId] = optionId;
-        }
+      if (!key.startsWith("question-")) continue;
+      const questionId = recordIdSchema.safeParse(
+        key.slice("question-".length)
+      );
+      const optionId = recordIdSchema.safeParse(value);
+      if (questionId.success && optionId.success) {
+        selectedAnswers[questionId.data] = optionId.data;
       }
     }
 
