@@ -92,8 +92,25 @@ function git(args: string[], { optional = false } = {}): string[] {
  * If not, it is the merge base with `origin/main`, then with `main`. A clone
  * with neither gets null. The script then examines only the uncommitted
  * changes, which is still a usable result.
+ *
+ * `MUTATE_BASE` overrides all of that with a ref you name; the script diffs
+ * against its merge base with HEAD. The agent workflows set it, because the
+ * reflog lies in CI: `git checkout -B` on a PR's head records the PR head as
+ * the start of the work, and an agent's own `git reset` moves it again. A
+ * review then grades only its own fixes and can report "nothing to mutate"
+ * for a module with no tests at all.
  */
 function findDiffBase(): string | null {
+  const named = process.env.MUTATE_BASE;
+  if (named) {
+    const [sha] = git(["merge-base", "HEAD", named], { optional: true });
+    if (!sha) {
+      console.error(`MUTATE_BASE=${named} has no merge base with HEAD.`);
+      process.exit(1);
+    }
+    return sha;
+  }
+
   const branch = git(["symbolic-ref", "--quiet", "--short", "HEAD"], {
     optional: true,
   })[0];

@@ -3,6 +3,7 @@
 // Usage: node scripts/check-file-tokens.js <file>...
 
 import { readFileSync } from "node:fs";
+import { relative } from "node:path";
 
 const MAX_TOKENS = 5000;
 const BYTES_PER_TOKEN = 4;
@@ -19,7 +20,9 @@ const isBinary = (contents) => contents.subarray(0, 8000).includes(0);
 
 const oversized = process.argv
   .slice(2)
-  .map((file) => file.replaceAll("\\", "/").replace(`${process.cwd()}/`, ""))
+  // lint-staged passes absolute paths. Relative to the cwd, with forward
+  // slashes on Windows too, or IGNORED never matches.
+  .map((file) => relative(process.cwd(), file).replaceAll("\\", "/"))
   .filter((file) => !IGNORED.some((pattern) => pattern.test(file)))
   .map((file) => ({ file, contents: readFileSync(file) }))
   .filter(({ contents }) => !isBinary(contents))

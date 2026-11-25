@@ -187,6 +187,9 @@ jobs:
         env:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           OUTPUT_DIR: ${{ runner.temp }}
+          # `npm run test:mutation` grades the whole PR, not only the
+          # review's fixes. See findDiffBase in scripts/mutate-diff.ts.
+          MUTATE_BASE: origin/${{ github.event.pull_request.base.ref }}
         run: npx tsx .sandcastle/agent-workflows/review/review.ts
 
       - name: Push the review's fixes
@@ -281,8 +284,9 @@ jobs:
       - name: Post the inline comments
         # One review, event COMMENT, with a comment on each line the agent
         # left a finding on. They go where the fixes went: the fallback PR if
-        # the push was rejected. review.ts already dropped every comment
-        # outside the diff, because GitHub rejects the whole review for one.
+        # the push was rejected. review.ts already moved every comment
+        # outside the diff into the verdict, because GitHub rejects the whole
+        # review for one.
         env:
           GH_TOKEN: ${{ secrets.FACTORY_PAT }}
           TARGET: ${{ steps.fallback.outputs.number || github.event.pull_request.number }}
